@@ -1,1 +1,155 @@
-/.venv
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# =========================
+# Virtual Environment
+# =========================
+.venv/
+venv/
+env/
+ENV/
+
+# =========================
+# Environment Variables / Secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Project Data
+# 대용량 원본 데이터는 Git에 올리지 않음
+# =========================
+data/
+*.parquet
+*.csv
+*.jsonl
+
+# README 예시용 샘플 데이터만 올리고 싶다면 아래처럼 예외 처리 가능
+# !data/sample/
+# !data/sample/*.csv
+# !data/sample/*.parquet
+
+# =========================
+# Spark Output / Checkpoint
+# Spark Structured Streaming 산출물
+# =========================
+output/
+checkpoint/
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Windows Spark temp / local dirs
+spark_tmp/
+spark_checkpoint/
+
+# =========================
+# Hadoop / Spark Local Files
+# 로컬 실행용 바이너리 및 임시 파일은 제외
+# =========================
+hadoop/
+winutils.exe
+hadoop.dll
+hdfs.dll
+
+# =========================
+# Kafka / Docker Local Volumes
+# 로컬 볼륨 데이터 제외
+# =========================
+kafka-data/
+zookeeper-data/
+postgres-data/
+pgdata/
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+*.out
+*.err
+
+# =========================
+# ML Artifacts
+# 학습된 모델과 성능 결과는 대용량/변동 산출물이므로 기본 제외
+# 필요하면 DVC, MLflow, Release Artifact 등으로 관리
+# =========================
+ml/models/
+ml/metrics/
+*.pkl
+*.joblib
+*.pickle
+*.pt
+*.pth
+*.onnx
+*.h5
+
+# 예시용 metrics만 올리고 싶다면 아래 예외 사용 가능
+# !ml/metrics/example_metrics.json
+
+# =========================
+# MLflow / Experiment Tracking
+# =========================
+mlruns/
+mlartifacts/
+
+# =========================
+# Jupyter Notebook
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Test / Coverage
+# =========================
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# =========================
+# FastAPI / Streamlit
+# =========================
+.streamlit/secrets.toml
+streamlit.log
+
+# =========================
+# Docker
+# =========================
+*.tar
+
+# Docker Compose override는 개인 환경 설정일 수 있으므로 제외
+docker-compose.override.yml
+
+# =========================
+# Kubernetes Secrets
+# =========================
+k8s/*secret*.yaml
+k8s/*secret*.yml
+secrets/
