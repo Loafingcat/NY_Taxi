@@ -2,3 +2,11 @@ pandas
 pyarrow
 kafka-python
 pyspark==3.4.1
+scikit-learn
+joblib
+fastapi
+uvicorn[standard]
+streamlit
+requests
+pytest
+httpx
