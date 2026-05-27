@@ -7,6 +7,10 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   test-train-build:
     runs-on: ubuntu-latest
@@ -33,9 +37,17 @@ jobs:
         run: |
           python -m compileall .
 
+      - name: Validate training data
+        run: |
+          python scripts/validate_training_data.py
+
       - name: Train model smoke test
         run: |
           python -m ml.train --sample
+
+      - name: Check model quality gate
+        run: |
+          python scripts/check_model_quality.py
 
       - name: Run tests
         run: |
@@ -52,6 +64,14 @@ jobs:
         run: |
           cat ml/metrics/metrics.json
 
+      - name: Upload model report artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-quality-report
+          path: |
+            ml/metrics/metrics.json
+            ml/registry/model_registry.json
+
       - name: Validate Docker Compose config
         run: |
           docker compose config
@@ -63,3 +83,23 @@ jobs:
       - name: Build Streamlit Docker image
         run: |
           docker build -f Dockerfile.streamlit -t ny-taxi-dashboard:test .
+
+      - name: Login to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push API image to GHCR
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker build -f Dockerfile.api -t ghcr.io/${{ github.repository_owner }}/ny-taxi-api:${{ github.sha }} .
+          docker push ghcr.io/${{ github.repository_owner }}/ny-taxi-api:${{ github.sha }}
+
+      - name: Push Streamlit image to GHCR
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker build -f Dockerfile.streamlit -t ghcr.io/${{ github.repository_owner }}/ny-taxi-dashboard:${{ github.sha }} .
+          docker push ghcr.io/${{ github.repository_owner }}/ny-taxi-dashboard:${{ github.sha }}
