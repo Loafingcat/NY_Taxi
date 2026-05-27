@@ -53,5 +53,38 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: ny_taxi_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ml/models:/app/ml/models
+      - ./ml/metrics:/app/ml/metrics
+    depends_on:
+      - postgres
+    environment:
+      - MODEL_PATH=/app/ml/models/fare_model.pkl
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: ny_taxi_dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./ml/metrics:/app/ml/metrics
+    depends_on:
+      - api
+    environment:
+      - API_URL=http://api:8000
+
+
 volumes:
   postgres_data:
+
+

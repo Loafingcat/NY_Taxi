@@ -41,9 +41,12 @@ jobs:
         run: |
           python -m ml.train --sample
 
-      - name: Check model artifact
+      - name: Check model artifacts
         run: |
           test -f ml/models/fare_model.pkl
+          test -f ml/models/production_model.pkl
+          test -f ml/metrics/metrics.json
+          test -f ml/registry/model_registry.json
 
       - name: Check metrics artifact
         run: |

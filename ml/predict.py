@@ -6,7 +6,7 @@ import pandas as pd
 from ml.features import FEATURE_COLUMNS
 
 
-MODEL_PATH = Path("ml/models/fare_model.pkl")
+MODEL_PATH = Path("ml/models/production_model.pkl")
 
 
 def load_model():
