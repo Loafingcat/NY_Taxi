@@ -33,13 +33,13 @@ jobs:
         run: |
           python -m compileall .
 
-      - name: Run tests
-        run: |
-          pytest
-
       - name: Train model smoke test
         run: |
           python -m ml.train --sample
+
+      - name: Run tests
+        run: |
+          pytest
 
       - name: Check model artifacts
         run: |
@@ -48,10 +48,6 @@ jobs:
           test -f ml/metrics/metrics.json
           test -f ml/registry/model_registry.json
 
-      - name: Check metrics artifact
-        run: |
-          test -f ml/metrics/metrics.json
-
       - name: Show metrics
         run: |
           cat ml/metrics/metrics.json
@@ -59,3 +55,11 @@ jobs:
       - name: Validate Docker Compose config
         run: |
           docker compose config
+
+      - name: Build API Docker image
+        run: |
+          docker build -f Dockerfile.api -t ny-taxi-api:test .
+
+      - name: Build Streamlit Docker image
+        run: |
+          docker build -f Dockerfile.streamlit -t ny-taxi-dashboard:test .
