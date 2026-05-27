@@ -72,6 +72,7 @@ def health_check():
     return {
         "status": "ok",
         "service": "ny-taxi-fare-api",
+        "version": "1.0.1",
         "production_model_exists": PRODUCTION_MODEL_PATH.exists(),
     }
 

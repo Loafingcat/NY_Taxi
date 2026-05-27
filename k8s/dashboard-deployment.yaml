@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ny-taxi-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ny-taxi-dashboard
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: ny-taxi-dashboard
+    spec:
+      containers:
+        - name: ny-taxi-dashboard
+          image: ghcr.io/loafingcat/ny-taxi-dashboard:023d4c03f1ef1c51ba6ac70d0e5f392f08aa951a
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8501
+          env:
+            - name: API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: ny-taxi-config
+                  key: API_URL
