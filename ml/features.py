@@ -13,6 +13,7 @@ FEATURE_COLUMNS = [
     "duration_minutes",
 ]
 
+# 맞춰야 하는 값
 TARGET_COLUMN = "fare_amount"
 
 

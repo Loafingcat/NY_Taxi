@@ -1,95 +1,157 @@
-# 카프카로 데이터를 쏘는 시뮬레이터
-import pandas as pd
 import json
+import os
 import time
+from pathlib import Path
+
+import pandas as pd
 from kafka import KafkaProducer
 
 
-# =========================
-# 1. 기본 설정
-# =========================
-TOPIC_NAME = "nyc-taxi-trips"
-FILE_PATH = "./data/yellow_tripdata_2026-01.parquet"
+KAFKA_BOOTSTRAP_SERVERS = os.getenv(
+    "KAFKA_BOOTSTRAP_SERVERS",
+    "localhost:9092",
+)
 
-# 테스트용 전송 개수
-LIMIT_ROWS = 10000
+TOPIC_NAME = os.getenv(
+    "KAFKA_TOPIC",
+    "nyc-taxi-trips",
+)
 
-# 실시간 느낌을 주기 위한 딜레이
-# 0.1초면 초당 약 10건
-# 대량 처리량 테스트를 하고 싶으면 0 또는 0.001 정도로 줄이면 됨
-SEND_DELAY = 0.1
+FILE_PATH = os.getenv(
+    "TAXI_DATA_PATH",
+    "./data/yellow_tripdata_2026-01.parquet",
+)
 
+STATE_PATH = Path(
+    os.getenv("PRODUCER_STATE_PATH", "producer_state.json")
+)
 
-# =========================
-# 2. Kafka Producer 생성
-# =========================
-producer = KafkaProducer(
-    bootstrap_servers=["localhost:9092"],
-    value_serializer=lambda x: json.dumps(x, ensure_ascii=False).encode("utf-8")
+SEND_INTERVAL_SECONDS = float(
+    os.getenv("PRODUCER_SEND_INTERVAL_SECONDS", "0")
+)
+
+PROGRESS_SAVE_INTERVAL = int(
+    os.getenv("PRODUCER_PROGRESS_SAVE_INTERVAL", "1000")
 )
 
 
-# =========================
-# 3. 데이터 로딩
-# =========================
-print("데이터 로딩 중...")
+def load_state() -> int:
+    if not STATE_PATH.exists():
+        return 0
 
-df = pd.read_parquet(FILE_PATH).head(LIMIT_ROWS)
-df = df.sort_values("tpep_pickup_datetime")
+    with open(STATE_PATH, "r", encoding="utf-8") as f:
+        state = json.load(f)
 
-# JSON 전송을 위해 날짜 컬럼을 문자열로 변환
-df["tpep_pickup_datetime"] = df["tpep_pickup_datetime"].astype(str)
-df["tpep_dropoff_datetime"] = df["tpep_dropoff_datetime"].astype(str)
-
-print(f"총 {len(df)}건의 데이터를 Kafka로 전송합니다.")
-print("실시간 스트리밍 시뮬레이션을 시작합니다.")
+    return int(state.get("last_sent_index", 0))
 
 
-# =========================
-# 4. Kafka로 한 줄씩 전송
-# =========================
-# Producer 단계에서 메시지 전송량을 msg/sec 기준으로 측정해, 로컬 환경에서의 처리량을 확인
-count = 0
-start_time = time.time()
+def save_state(last_sent_index: int):
+    with open(STATE_PATH, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "last_sent_index": last_sent_index,
+                "data_path": FILE_PATH,
+                "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
-for index, row in df.iterrows():
-    message = row.to_dict()
 
-    producer.send(TOPIC_NAME, value=message)
+def main():
+    print("=" * 80)
+    print("NY Taxi Kafka Producer Started")
+    print(f"Kafka Bootstrap Servers : {KAFKA_BOOTSTRAP_SERVERS}")
+    print(f"Kafka Topic             : {TOPIC_NAME}")
+    print(f"Data Path               : {FILE_PATH}")
+    print(f"State Path              : {STATE_PATH}")
+    print(f"Send Interval Seconds   : {SEND_INTERVAL_SECONDS}")
+    print("=" * 80)
 
-    count += 1
-
-    print(
-        f"Sent: Pickup={message['tpep_pickup_datetime']}, "
-        f"Fare=${message['fare_amount']}"
+    producer = KafkaProducer(
+        bootstrap_servers=[KAFKA_BOOTSTRAP_SERVERS],
+        value_serializer=lambda x: json.dumps(x).encode("utf-8"),
+        acks="all",
+        retries=5,
+        linger_ms=50,
+        batch_size=32768,
     )
 
-    # 1000건마다 처리량 출력
-    if count % 1000 == 0:
+    print("전체 Parquet 데이터 로딩 중...")
+    df = pd.read_parquet(FILE_PATH)
+    df = df.sort_values("tpep_pickup_datetime").reset_index(drop=True)
+
+    total_rows = len(df)
+    start_index = load_state()
+
+    print(f"전체 데이터 수: {total_rows}")
+    print(f"이전 마지막 전송 위치: {start_index}")
+
+    if start_index >= total_rows:
+        print("이미 전체 데이터를 Kafka로 전송했습니다.")
+        producer.close()
+        return
+
+    df["tpep_pickup_datetime"] = df["tpep_pickup_datetime"].astype(str)
+    df["tpep_dropoff_datetime"] = df["tpep_dropoff_datetime"].astype(str)
+
+    target_df = df.iloc[start_index:]
+
+    print(f"이번 실행 전송 시작 index: {start_index}")
+    print(f"이번 실행 전송 대상 건수: {len(target_df)}")
+
+    start_time = time.time()
+    sent_count = 0
+    last_index = start_index
+
+    try:
+        for index, row in target_df.iterrows():
+            message = row.to_dict()
+
+            producer.send(TOPIC_NAME, value=message)
+
+            sent_count += 1
+            last_index = index + 1
+
+            if sent_count % PROGRESS_SAVE_INTERVAL == 0:
+                producer.flush()
+                save_state(last_index)
+
+                elapsed = time.time() - start_time
+                rate = sent_count / elapsed if elapsed > 0 else 0
+
+                print(
+                    f"Sent {sent_count} messages "
+                    f"/ current_index={last_index} "
+                    f"/ rate={rate:.2f} msg/sec"
+                )
+
+            if SEND_INTERVAL_SECONDS > 0:
+                time.sleep(SEND_INTERVAL_SECONDS)
+
+        producer.flush()
+        save_state(last_index)
+
         elapsed = time.time() - start_time
-        rate = count / elapsed
+        rate = sent_count / elapsed if elapsed > 0 else 0
 
-        print("=" * 60)
-        print(f"Sent {count} messages")
-        print(f"Elapsed time: {elapsed:.2f} sec")
-        print(f"Producer rate: {rate:.2f} msg/sec")
-        print("=" * 60)
+        print("=" * 80)
+        print("전체 데이터 전송 완료")
+        print(f"전송 건수: {sent_count}")
+        print(f"마지막 저장 index: {last_index}")
+        print(f"평균 전송 속도: {rate:.2f} msg/sec")
+        print("=" * 80)
 
-    # 실시간 느낌을 주기 위한 딜레이
-    if SEND_DELAY > 0:
-        time.sleep(SEND_DELAY)
+    except KeyboardInterrupt:
+        print("사용자 중단 감지. 현재 위치를 저장합니다.")
+        producer.flush()
+        save_state(last_index)
+        print(f"저장된 마지막 index: {last_index}")
+
+    finally:
+        producer.close()
 
 
-# =========================
-# 5. 남은 메시지 전송 보장
-# =========================
-producer.flush()
-producer.close()
-
-total_elapsed = time.time() - start_time
-final_rate = count / total_elapsed if total_elapsed > 0 else 0
-
-print("Kafka 전송 완료")
-print(f"Total sent: {count} messages")
-print(f"Total elapsed time: {total_elapsed:.2f} sec")
-print(f"Average producer rate: {final_rate:.2f} msg/sec")
+if __name__ == "__main__":
+    main()
